@@ -615,7 +615,6 @@ function spin() {
             taskNameSpan.textContent = state.selectedTask;
 
             // 2. Adiciona uma lista de participantes pré-definida
-            // A lógica da roleta é tendenciosa para 'female', então incluímos ambos os gêneros.
             state.participants = [
                 { name: 'João', gender: 'male' },
                 { name: 'Victor', gender: 'male' },
@@ -623,7 +622,7 @@ function spin() {
                 { name: 'Felipe', gender: 'male' },
                 { name: 'Gabriel', gender: 'male' },
                 { name: 'Julio', gender: 'male' },
-                { name: 'Arron', gender: 'male' }
+                { name: 'Aaron', gender: 'male' }
             ];
 
             console.log("DEBUG: Participantes definidos:", state.participants);
