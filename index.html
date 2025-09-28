@@ -37,7 +37,8 @@
         /* Estilo base com a fonte Poppins */
         body {
             font-family: 'Poppins', sans-serif;
-            overflow: hidden;
+            
+    
             /* Evita barras de rolagem durante as animações */
         }
 
@@ -82,11 +83,11 @@
     </style>
 </head>
 
-<body class="bg-slate-900 text-white flex items-center justify-center h-screen p-4">
+<body class="bg-slate-900 text-white flex items-center justify-center p-4 min-h-screen">
 
-    <div id="app" class="w-full max-w-md mx-auto relative">
+    <div id="app" class="w-full max-w-md mx-auto relative flex flex-col justify-center items-center">
         <!-- ETAPA 1: SELEÇÃO DE TAREFA -->
-        <div id="task-selection-screen" class="screen space-y-6 text-center">
+        <div id="task-selection-screen" class="space-y-6 text-center">
             <!-- <button id="debug-btn" class="absolute top-2 right-2 bg-yellow-500 text-black text-xs font-bold py-1 px-2 rounded-full z-20 hover:bg-yellow-400">DEBUG</button> -->
             <h1 class="text-4xl font-bold text-violet-400">Roleta da Tarefa</h1>
             <h2 class="text-xl text-slate-300">Primeiro, qual tarefa precisa ser feita?</h2>
