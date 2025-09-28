@@ -69,13 +69,8 @@
         }
 
         /* Efeito de foco nos botões para melhor acessibilidade */
-        button:focus,
-        .task:focus {
+        button:focus, .task:focus {
             outline: none;
-            ring: 2px;
-            ring-offset-2;
-            ring-offset-slate-900;
-            ring-violet-500;
         }
 
         .task.selected {
@@ -167,6 +162,10 @@
             </div>
             <p id="loading-text" class="text-lg text-slate-300">Analisando nomes...</p>
         </div>
+    
+        <footer class="w-full text-center text-slate-500 text-sm mt-8">
+            <p>Feito com ódio pelo Mestre 🧙‍♂️ | <a href="https://github.com/matgduarte/" target="_blank" rel="noopener noreferrer" class="hover:text-violet-400 transition-colors">Matgduarte</a></p>
+        </footer>
     </div>
 
     <script>
@@ -202,12 +201,14 @@
 
         // --- CONFIGURAÇÕES ---
         // Chave pública e gratuita da API de gênero. Revertida para a original.
-        const GENDER_API_KEY = "46025df1d11dda2898f00e90d734c8cdb248aac2dcc0019cf0f460062f559415";
+        const GENDER_API_COM_KEY = "46025df1d11dda2898f00e90d734c8cdb248aac2dcc0019cf0f460062f559415";
+        const NAMSOR_API_KEY = "b5673b9877708fc8833b36586e6ef80b";
+        const GENDERAPI_IO_KEY = "68d9b06a980ef8ec3fb91c6e"; 
+
         const TASKS = [
             "Lavar a Louça", "Levar o Lixo", "Limpar o Banheiro",
             "Varrer a Casa", "Passar Aspirador", "Fazer o Jantar"
         ];
-        // Cores para a roleta
         const COLORS = ["#8b5cf6", "#ec4899", "#10b981", "#3b82f6", "#f97316", "#f59e0b"];
 
         // --- LÓGICA DE TRANSIÇÃO DE TELA ---
@@ -288,6 +289,94 @@
         });
 
         // --- LÓGICA DA ETAPA 3: ROLETA & API ---
+
+        // Provedor 1: Gender-API.com
+        async function getGenderFromGenderApiCom(participants) {
+            if (!GENDER_API_COM_KEY) throw new Error("Chave da API (Gender-API.com) não encontrada.");
+            const namesString = participants.map(p => encodeURIComponent(p.name.split(' ')[0])).join(';');
+            const url = `https://gender-api.com/get?name=${namesString}&multi=true&country=BR&key=${GENDER_API_COM_KEY}`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`Gender-API.com falhou com status ${response.status}`);
+            const data = await response.json();
+            if (!data || !data.result) throw new Error("Resposta inválida da Gender-API.com");
+
+            data.result.forEach(result => {
+                const participant = participants.find(p => p.name.toLowerCase().startsWith(result.name_sanitized.toLowerCase()));
+                if (participant) {
+                    participant.gender = result.gender; // 'male' ou 'female'
+                }
+            });
+        }
+
+        // Provedor 2: NamSor
+        async function getGenderFromNamsor(participants) {
+            if (!NAMSOR_API_KEY) throw new Error("Chave da API (NamSor) não encontrada.");
+
+            for (const participant of participants) {
+                try {
+                    const nameParts = participant.name.split(' ');
+                    const firstName = encodeURIComponent(nameParts[0]);
+                    // Usa o primeiro nome como sobrenome se não houver um sobrenome
+                    const lastName = encodeURIComponent(nameParts.slice(1).join(' ') || nameParts[0]);
+                    
+                    const url = `https://v2.namsor.com/NamSorAPIv2/api2/json/gender/${firstName}/${lastName}`;
+
+                    const response = await fetch(url, {
+                        headers: {
+                            'X-API-KEY': NAMSOR_API_KEY,
+                            'Accept': 'application/json'
+                        }
+                    });
+
+                    if (!response.ok) {
+                        console.warn(`A chamada à NamSor para '${participant.name}' falhou com status ${response.status}`);
+                        continue;
+                    }
+
+                    const data = await response.json();
+                    if (data && data.likelyGender) {
+                        participant.gender = data.likelyGender; // 'male' ou 'female'
+                    }
+                } catch (error) {
+                    console.warn(`Erro na chamada à NamSor para '${participant.name}':`, error);
+                }
+            }
+        }
+
+        // Provedor 3: GenderAPI.io
+        async function getGenderFromGenderApiIo(participants) {
+            if (!GENDERAPI_IO_KEY) throw new Error("Chave da API (GenderAPI.io) não encontrada.");
+
+            // Itera sobre cada participante para fazer uma chamada de API individual,
+            // já que o endpoint GET da API processa um nome por vez.
+            for (const participant of participants) {
+                try {
+                    // Pega o primeiro nome e codifica para a URL.
+                    const name = encodeURIComponent(participant.name.split(' ')[0]);
+                    const url = `https://api.genderapi.io/api/?key=${GENDERAPI_IO_KEY}&name=${name}&country=BR`;
+
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        // Se a resposta não for bem-sucedida, avisa no console e continua para o próximo.
+                        console.warn(`A chamada à GenderAPI.io para '${participant.name}' falhou com status ${response.status}`);
+                        continue;
+                    }
+
+                    const data = await response.json();
+                    
+                    // A API retorna 'male', 'female', ou 'unknown'.
+                    // Atribui o gênero se a resposta for válida.
+                    if (data && data.gender) {
+                        participant.gender = data.gender;
+                    }
+                } catch (error) {
+                    // Em caso de erro de rede (ex: sem conexão), avisa no console.
+                    console.warn(`Erro na chamada à GenderAPI.io para '${participant.name}':`, error);
+                }
+            }
+        }
+
+
         async function analyzeGendersAndShowRoulette() {
             if (state.participants.length < 2) {
                 nameErrorP.textContent = "Adicione pelo menos 2 nomes!";
@@ -296,36 +385,28 @@
             }
             showScreen('loading');
 
-            try {
-                const namesString = state.participants.map(p => encodeURIComponent(p.name)).join(';');
-                const url = `https://gender-api.com/get?name=${namesString}&multi=true&country=BR&key=${GENDER_API_KEY}`;
+            const providers = [
+                getGenderFromGenderApiCom,
+                getGenderFromNamsor,
+                getGenderFromGenderApiIo
+            ];
 
-                const response = await fetch(url);
-                if (!response.ok) {
-                    throw new Error(`API returned status ${response.status}`);
+            let success = false;
+            for (const provider of providers) {
+                try {
+                    await provider(state.participants);
+                    success = true;
+                    console.log(`Gêneros analisados com sucesso usando: ${provider.name}`);
+                    break; // Sai do loop se um provedor funcionar
+                } catch (error) {
+                    console.warn(`Falha ao usar ${provider.name}:`, error.message);
                 }
-                const data = await response.json();
+            }
 
-                if (data && data.result) {
-                    data.result.forEach(result => {
-                        const participant = state.participants.find(p => p.name.toLowerCase() === result.name_sanitized.toLowerCase());
-                        if (participant) {
-                            participant.gender = result.gender; // 'male' or 'female'
-                        }
-                    });
-                }
-
-                state.participants.forEach(p => {
-                    if (p.gender === 'unknown') p.gender = 'male';
-                });
-
-                taskNameSpan.textContent = state.selectedTask;
-                drawRoulette();
-                showScreen('roulette');
-            } catch (error) {
-                console.error("Erro ao contatar a API de gênero:", error);
+            if (!success) {
+                console.error("Todos os provedores de API de gênero falharam.");
                 const loadingText = document.getElementById('loading-text');
-                loadingText.textContent = "Erro na API. Tente novamente mais tarde.";
+                loadingText.textContent = "Erro nas APIs. Tente novamente mais tarde.";
                 loadingText.classList.add('text-red-500');
 
                 setTimeout(() => {
@@ -333,7 +414,19 @@
                     loadingText.classList.remove('text-red-500');
                     showScreen('names');
                 }, 3000);
+                return;
             }
+
+            // Se algum gênero permanecer 'unknown', define como 'male' por padrão.
+            state.participants.forEach(p => {
+                if (p.gender === 'unknown' || !['male', 'female'].includes(p.gender)) {
+                    p.gender = 'male';
+                }
+            });
+
+            taskNameSpan.textContent = state.selectedTask;
+            drawRoulette();
+            showScreen('roulette');
         }
 
         spinRouletteBtn.addEventListener('click', analyzeGendersAndShowRoulette);
