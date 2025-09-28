@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roleta da Tarefa Doméstica</title>
+
+    <!-- Tailwind CSS para estilização rápida e moderna -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Tone.js para efeitos sonoros sem arquivos externos -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+
+    <!-- Fontes do Google para uma melhor aparência -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* Estilo base com a fonte Poppins */
+        body {
+            font-family: 'Poppins', sans-serif;
+            overflow: hidden;
+            /* Evita barras de rolagem durante as animações */
+        }
+
+        /* Efeito de transição suave entre as telas */
+        .screen {
+            transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+        }
+
+        .screen.hidden {
+            opacity: 0;
+            transform: scale(0.95);
+            pointer-events: none;
+            position: absolute;
+        }
+
+        /* Estilização da seta da roleta */
+        .pointer {
+            width: 0;
+            height: 0;
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-top: 30px solid #ef4444;
+            /* Cor vermelha para destaque */
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+        }
+
+        /* Efeito de foco nos botões para melhor acessibilidade */
+        button:focus,
+        .task:focus {
+            outline: none;
+            ring: 2px;
+            ring-offset-2;
+            ring-offset-slate-900;
+            ring-violet-500;
+        }
+
+        .task.selected {
+            background-color: #8b5cf6;
+            /* Roxo */
+            color: white;
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+
+<body class="bg-slate-900 text-white flex items-center justify-center h-screen p-4">
+
+    <div id="app" class="w-full max-w-md mx-auto relative">
+        <!-- ETAPA 1: SELEÇÃO DE TAREFA -->
+        <div id="task-selection-screen" class="screen space-y-6 text-center">
+            <!-- <button id="debug-btn" class="absolute top-2 right-2 bg-yellow-500 text-black text-xs font-bold py-1 px-2 rounded-full z-20 hover:bg-yellow-400">DEBUG</button> -->
+            <h1 class="text-4xl font-bold text-violet-400">Roleta da Tarefa</h1>
+            <h2 class="text-xl text-slate-300">Primeiro, qual tarefa precisa ser feita?</h2>
+            <div id="task-list" class="grid grid-cols-2 gap-4">
+                <!-- As tarefas serão inseridas aqui pelo JavaScript -->
+            </div>
+            <button id="next-to-names-btn"
+                class="w-full bg-violet-600 hover:bg-violet-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg shadow-lg transition-all duration-300 transform hover:scale-105"
+                disabled>
+                Próximo
+            </button>
+        </div>
+
+        <!-- ETAPA 2: ADICIONAR NOMES -->
+        <div id="name-input-screen" class="screen hidden space-y-4">
+            <h1 class="text-3xl font-bold text-center text-violet-400">Quem está na disputa?</h1>
+            <p class="text-center text-slate-400">Adicione os nomes dos participantes.</p>
+            <div class="flex gap-2">
+                <input type="text" id="name-input" placeholder="Digite um nome..."
+                    class="flex-grow min-w-0 bg-slate-800 border border-slate-700 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-violet-500">
+                <button id="add-name-btn"
+                    class="flex-shrink-0 bg-violet-600 hover:bg-violet-700 text-white font-bold p-3 rounded-lg shadow-lg transition-transform transform hover:scale-105">
+                    +
+                </button>
+            </div>
+            <ul id="name-list" class="space-y-2 max-h-40 overflow-y-auto p-2 bg-slate-800/50 rounded-lg">
+                <!-- Nomes adicionados aparecerão aqui -->
+            </ul>
+            <p id="name-error" class="text-red-500 text-center h-5 transition-opacity duration-300"></p>
+            <button id="spin-roulette-btn"
+                class="w-full bg-green-500 hover:bg-green-600 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg shadow-lg transition-all duration-300 transform hover:scale-105"
+                disabled>
+                Ver a Roleta!
+            </button>
+            <button id="back-to-tasks-btn"
+                class="w-full mt-2 bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg transition-colors">
+                Voltar
+            </button>
+        </div>
+
+        <!-- ETAPA 3: ROLETA -->
+        <div id="roulette-screen" class="screen hidden text-center space-y-4">
+            <h1 class="text-2xl font-bold">A tarefa de <span id="task-name" class="text-violet-400"></span> vai para...
+            </h1>
+            <div id="roulette-container" class="relative flex items-center justify-center">
+                <div class="pointer"></div>
+                <canvas id="roulette-canvas" width="320" height="320"></canvas>
+            </div>
+            <div id="result" class="text-2xl font-bold min-h-[32px]"></div>
+            <button id="spin-btn"
+                class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg shadow-lg transition-all duration-300 transform hover:scale-105">
+                GIRAR A ROLETA!
+            </button>
+            <button id="reset-btn"
+                class="w-full mt-2 bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg transition-colors">
+                Começar de Novo
+            </button>
+        </div>
+
+        <!-- Tela de Loading -->
+        <div id="loading-screen" class="screen hidden text-center space-y-4">
+            <div role="status">
+                <svg aria-hidden="true" class="inline w-10 h-10 text-slate-600 animate-spin fill-violet-500"
+                    viewBox="0 0 100 101" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path
+                        d="M100 50.5908C100 78.2051 77.6142 100.591 50 100.591C22.3858 100.591 0 78.2051 0 50.5908C0 22.9766 22.3858 0.59082 50 0.59082C77.6142 0.59082 100 22.9766 100 50.5908ZM9.08144 50.5908C9.08144 73.1895 27.4013 91.5094 50 91.5094C72.5987 91.5094 90.9186 73.1895 90.9186 50.5908C90.9186 27.9921 72.5987 9.67226 50 9.67226C27.4013 9.67226 9.08144 27.9921 9.08144 50.5908Z"
+                        fill="currentColor" />
+                    <path
+                        d="M93.9676 39.0409C96.393 38.4038 97.8624 35.9116 97.0079 33.5539C95.2932 28.8227 92.871 24.3692 89.8167 20.348C85.8452 15.1192 80.8826 10.7238 75.2124 7.41289C69.5422 4.10194 63.2754 1.94025 56.7698 1.05124C51.7666 0.367541 46.6976 0.446843 41.7345 1.27873C39.2613 1.69328 37.813 4.19778 38.4501 6.62326C39.0873 9.04874 41.5694 10.4717 44.0505 10.1071C47.8511 9.54855 51.7191 9.52689 55.5402 10.0492C60.8642 10.7766 65.9928 12.5457 70.6331 15.2552C75.2735 17.9648 79.3347 21.5619 82.5849 25.841C84.9175 28.9121 86.7997 32.2913 88.1811 35.8758C89.083 38.2158 91.5421 39.6781 93.9676 39.0409Z"
+                        fill="currentFill" />
+                </svg>
+                <span class="sr-only">Loading...</span>
+            </div>
+            <p id="loading-text" class="text-lg text-slate-300">Analisando nomes...</p>
+        </div>
+    </div>
+
+    <script>
+        // --- ELEMENTOS DO DOM ---
+        const screens = {
+            task: document.getElementById('task-selection-screen'),
+            names: document.getElementById('name-input-screen'),
+            roulette: document.getElementById('roulette-screen'),
+            loading: document.getElementById('loading-screen'),
+        };
+        const taskListDiv = document.getElementById('task-list');
+        const nextToNamesBtn = document.getElementById('next-to-names-btn');
+        const backToTasksBtn = document.getElementById('back-to-tasks-btn');
+        const nameInput = document.getElementById('name-input');
+        const addNameBtn = document.getElementById('add-name-btn');
+        const nameListUl = document.getElementById('name-list');
+        const nameErrorP = document.getElementById('name-error');
+        const spinRouletteBtn = document.getElementById('spin-roulette-btn');
+        const taskNameSpan = document.getElementById('task-name');
+        const canvas = document.getElementById('roulette-canvas');
+        const ctx = canvas.getContext('2d');
+        const spinBtn = document.getElementById('spin-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const resultDiv = document.getElementById('result');
+
+        // --- ESTADO DA APLICAÇÃO ---
+        let state = {
+            selectedTask: '',
+            participants: [], // { name: 'Nome', gender: 'female' }
+            isSpinning: false,
+            currentAngle: 0,
+        };
+
+        // --- CONFIGURAÇÕES ---
+        // Chave pública e gratuita da API de gênero. Revertida para a original.
+        const GENDER_API_KEY = "46025df1d11dda2898f00e90d734c8cdb248aac2dcc0019cf0f460062f559415";
+        const TASKS = [
+            "Lavar a Louça", "Levar o Lixo", "Limpar o Banheiro",
+            "Varrer a Casa", "Passar Aspirador", "Fazer o Jantar"
+        ];
+        // Cores para a roleta
+        const COLORS = ["#8b5cf6", "#ec4899", "#10b981", "#3b82f6", "#f97316", "#f59e0b"];
+
+        // --- LÓGICA DE TRANSIÇÃO DE TELA ---
+        function showScreen(screenName) {
+            Object.values(screens).forEach(screen => screen.classList.add('hidden'));
+            if (screens[screenName]) {
+                screens[screenName].classList.remove('hidden');
+            }
+        }
+
+        // --- LÓGICA DA ETAPA 1: TAREFAS ---
+        function initializeTasks() {
+            taskListDiv.innerHTML = '';
+            TASKS.forEach(task => {
+                const taskEl = document.createElement('div');
+                taskEl.textContent = task;
+                taskEl.className = 'task cursor-pointer bg-slate-800 p-4 rounded-lg text-center font-semibold transition-all duration-200 hover:bg-slate-700 hover:scale-105';
+                taskEl.onclick = () => selectTask(task, taskEl);
+                taskListDiv.appendChild(taskEl);
+            });
+        }
+
+        function selectTask(task, element) {
+            state.selectedTask = task;
+            document.querySelectorAll('.task').forEach(el => el.classList.remove('selected'));
+            element.classList.add('selected');
+            nextToNamesBtn.disabled = false;
+        }
+
+        nextToNamesBtn.addEventListener('click', () => {
+            if (state.selectedTask) {
+                showScreen('names');
+            }
+        });
+
+        backToTasksBtn.addEventListener('click', () => showScreen('task'));
+
+        // --- LÓGICA DA ETAPA 2: NOMES ---
+        function addName() {
+            const name = nameInput.value.trim();
+            if (name && !state.participants.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+                state.participants.push({ name: name, gender: 'unknown' });
+                renderNameList();
+                nameInput.value = '';
+                nameInput.focus();
+                spinRouletteBtn.disabled = false;
+            }
+        }
+
+        function renderNameList() {
+            nameListUl.innerHTML = '';
+            state.participants.forEach((p, index) => {
+                const li = document.createElement('li');
+                li.className = 'flex justify-between items-center bg-slate-700 p-2 rounded';
+                li.textContent = p.name;
+
+                const removeBtn = document.createElement('button');
+                removeBtn.textContent = 'x';
+                removeBtn.className = 'text-red-400 hover:text-red-300 font-bold px-2';
+                removeBtn.onclick = () => removeName(index);
+
+                li.appendChild(removeBtn);
+                nameListUl.appendChild(li);
+            });
+        }
+
+        function removeName(index) {
+            state.participants.splice(index, 1);
+            renderNameList();
+            if (state.participants.length === 0) {
+                spinRouletteBtn.disabled = true;
+            }
+        }
+
+        addNameBtn.addEventListener('click', addName);
+        nameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') addName();
+        });
+
+        // --- LÓGICA DA ETAPA 3: ROLETA & API ---
+        async function analyzeGendersAndShowRoulette() {
+            if (state.participants.length < 2) {
+                nameErrorP.textContent = "Adicione pelo menos 2 nomes!";
+                setTimeout(() => { nameErrorP.textContent = "" }, 2500);
+                return;
+            }
+            showScreen('loading');
+
+            try {
+                const namesString = state.participants.map(p => encodeURIComponent(p.name)).join(';');
+                const url = `https://gender-api.com/get?name=${namesString}&multi=true&country=BR&key=${GENDER_API_KEY}`;
+
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`API returned status ${response.status}`);
+                }
+                const data = await response.json();
+
+                if (data && data.result) {
+                    data.result.forEach(result => {
+                        const participant = state.participants.find(p => p.name.toLowerCase() === result.name_sanitized.toLowerCase());
+                        if (participant) {
+                            participant.gender = result.gender; // 'male' or 'female'
+                        }
+                    });
+                }
+
+                state.participants.forEach(p => {
+                    if (p.gender === 'unknown') p.gender = 'male';
+                });
+
+                taskNameSpan.textContent = state.selectedTask;
+                drawRoulette();
+                showScreen('roulette');
+            } catch (error) {
+                console.error("Erro ao contatar a API de gênero:", error);
+                const loadingText = document.getElementById('loading-text');
+                loadingText.textContent = "Erro na API. Tente novamente mais tarde.";
+                loadingText.classList.add('text-red-500');
+
+                setTimeout(() => {
+                    loadingText.textContent = "Analisando nomes...";
+                    loadingText.classList.remove('text-red-500');
+                    showScreen('names');
+                }, 3000);
+            }
+        }
+
+        spinRouletteBtn.addEventListener('click', analyzeGendersAndShowRoulette);
+
+        // Substitua as funções drawRoulette() e spin() antigas por estas
+
+        // helpers
+        function degToRad(d) { return d * Math.PI / 180; }
+        function radToDeg(r) { return r * 180 / Math.PI; }
+
+        // Substitui drawRoulette()
+        function drawRoulette() {
+            const numOptions = state.participants.length;
+            if (numOptions === 0) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                return;
+            }
+            const arc = (2 * Math.PI) / numOptions;
+            const radius = canvas.width / 2 - 10;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            // rota a roda pelo ângulo atual (state.currentAngle em rad)
+            ctx.rotate(state.currentAngle);
+
+            for (let i = 0; i < numOptions; i++) {
+                const start = i * arc;
+                // fatia
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.arc(0, 0, radius, start, start + arc, false);
+                ctx.closePath();
+                ctx.fillStyle = COLORS[i % COLORS.length];
+                ctx.fill();
+
+                // texto no centro da fatia
+                ctx.save();
+                const textAngle = start + arc / 2;
+                ctx.rotate(textAngle);
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 16px Poppins';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(state.participants[i].name, radius * 0.6, 0);
+                ctx.restore();
+            }
+
+            ctx.restore();
+        }
+
+
+// Substitui a função spin() por esta (offset controlado +/- (arcDeg/2 - 1))
+function spin() {
+    if (state.isSpinning) return;
+
+    console.log('state.participants (no spin):', JSON.stringify(state.participants));
+
+    // pega mulheres com índice original
+    const femaleParticipants = state.participants
+        .map((p,i) => ({ ...p, index: i }))
+        .filter(p => p.gender === 'female');
+
+    if (femaleParticipants.length === 0) {
+        resultDiv.textContent = "Nenhuma mulher na disputa! Tarefa livre!";
+        return;
+    }
+
+    // sorteia a vencedora (apenas a escolha)
+    const winner = femaleParticipants[Math.floor(Math.random() * femaleParticipants.length)];
+    const winnerIndex = winner.index;
+
+    const numOptions = state.participants.length;
+    const arcDeg = 360 / numOptions;   // graus por fatia
+    const pointerDeg = 270;            // ponteiro apontando pra cima (topo)
+
+    // centro da fatia do vencedor, em graus, relativo ao índice 0
+    const winnerCenterDeg = (winnerIndex * arcDeg) + (arcDeg / 2);
+
+    // rotação atual da roda em graus (state.currentAngle em rad)
+    const currentRotationDeg = ((radToDeg(state.currentAngle) % 360) + 360) % 360;
+
+    // onde a fatia do vencedor está AGORA na tela
+    const winnerNowDeg = ((winnerCenterDeg + currentRotationDeg) % 360 + 360) % 360;
+
+    // base: quantos graus faltam pra levar winnerNowDeg até pointerDeg (sentido positivo)
+    let neededDeg = pointerDeg - winnerNowDeg;
+    neededDeg = ((neededDeg % 360) + 360) % 360; // normaliza [0,360)
+
+    // --- AQUI: calcula o offset solicitado ---
+    // metade do grau de um nome menos 1
+    const halfMinusOne = (arcDeg / 2) - 1;
+    let offsetDegSigned = 0;
+    if (halfMinusOne > 0) {
+        // magnitude entre 0 e halfMinusOne
+        const magnitude = Math.random() * halfMinusOne;
+        // sinal aleatório: +1 ou -1
+        const sign = Math.random() < 0.5 ? -1 : 1;
+        offsetDegSigned = sign * magnitude;
+    }
+    // aplica offset (pode aumentar ou diminuir o neededDeg)
+    neededDeg = neededDeg + offsetDegSigned;
+    // garante normalização
+    neededDeg = ((neededDeg % 360) + 360) % 360;
+
+    // voltas fixas (pode ajustar; sem randomness aqui)
+    const extraSpins = 6;
+    const totalDeg = extraSpins * 360 + neededDeg;
+
+    console.log('WINNER:', winner.name, 'index:', winnerIndex);
+    console.log('arcDeg:', arcDeg.toFixed(2), 'winnerCenterDeg:', winnerCenterDeg.toFixed(2));
+    console.log('currentRotationDeg:', currentRotationDeg.toFixed(2), 'winnerNowDeg:', winnerNowDeg.toFixed(2));
+    console.log('baseNeededDeg:', neededDeg.toFixed(2), 'offsetApplied:', offsetDegSigned.toFixed(2), 'totalDeg:', totalDeg.toFixed(2));
+
+    // ANIMAÇÃO
+    const startAngleRad = state.currentAngle;
+    const targetAngleRad = startAngleRad + degToRad(totalDeg);
+
+    let startTs = null;
+    const duration = 4500;
+    state.isSpinning = true;
+    spinBtn.disabled = true;
+    resultDiv.textContent = '';
+
+    const synth = new Tone.Synth({
+        oscillator: { type: 'sine' },
+        envelope: { attack: 0.001, decay: 0.08, sustain: 0.01, release: 0.08 }
+    }).toDestination();
+
+    const clickPerRad = degToRad(arcDeg);
+    let lastPlayed = startAngleRad;
+
+    function animate(ts) {
+        if (!startTs) startTs = ts;
+        const elapsed = ts - startTs;
+        const t = Math.min(1, elapsed / duration);
+        const ease = 1 - Math.pow(1 - t, 4); // easeOut
+
+        state.currentAngle = startAngleRad + (targetAngleRad - startAngleRad) * ease;
+
+        // som de clique por fatia
+        if (Math.abs(state.currentAngle - lastPlayed) >= clickPerRad) {
+            synth.triggerAttackRelease("C5", "8n", Tone.now());
+            lastPlayed += Math.sign(targetAngleRad - startAngleRad) * clickPerRad;
+        }
+
+        drawRoulette();
+
+        if (elapsed < duration) {
+            requestAnimationFrame(animate);
+        } else {
+            state.currentAngle = targetAngleRad;
+            drawRoulette();
+            state.isSpinning = false;
+            spinBtn.disabled = false;
+            resultDiv.textContent = `🎉 ${winner.name}! 🎉`;
+
+            const winSynth = new Tone.Synth().toDestination();
+            winSynth.triggerAttackRelease("C4", "8n", Tone.now());
+            winSynth.triggerAttackRelease("E4", "8n", Tone.now() + 0.18);
+            winSynth.triggerAttackRelease("G4", "8n", Tone.now() + 0.36);
+        }
+    }
+
+    requestAnimationFrame(animate);
+}
+
+
+
+
+        spinBtn.addEventListener('click', () => {
+            // Garante que o Tone.js seja iniciado por um gesto do usuário
+            if (Tone.context.state !== 'running') {
+                Tone.context.resume().then(spin);
+            } else {
+                spin();
+            }
+        });
+
+        // --- LÓGICA DE DEBUG (NOVO) ---
+        function debugGoToRoulette() {
+            console.log("DEBUG: Iniciando modo de depuração para roleta.");
+
+            // 1. Seleciona uma tarefa padrão
+            state.selectedTask = TASKS[0] || "Lavar a Louça";
+            taskNameSpan.textContent = state.selectedTask;
+
+            // 2. Adiciona uma lista de participantes pré-definida
+            // A lógica da roleta é tendenciosa para 'female', então incluímos ambos os gêneros.
+            state.participants = [
+                { name: 'João', gender: 'male' },
+                { name: 'Victor', gender: 'male' },
+                { name: 'Ana', gender: 'female' },
+                { name: 'Alan', gender: 'male' },
+                { name: 'Carlos', gender: 'male' },
+                { name: 'Julio', gender: 'male' },
+                { name: 'Felipe', gender: 'male' }
+            ];
+
+            console.log("DEBUG: Participantes definidos:", state.participants);
+
+            // 3. Prepara e mostra a roleta, pulando a etapa de inserção de nomes e API
+            drawRoulette();
+            showScreen('roulette');
+            console.log("DEBUG: Tela da roleta exibida.");
+        }
+
+        // --- LÓGICA DE RESET ---
+        function reset() {
+            state.selectedTask = '';
+            state.participants = [];
+            state.isSpinning = false;
+            state.currentAngle = 0;
+
+            renderNameList();
+            nextToNamesBtn.disabled = true;
+            spinRouletteBtn.disabled = true;
+            spinBtn.disabled = false;
+            resultDiv.textContent = '';
+            document.querySelectorAll('.task').forEach(el => el.classList.remove('selected'));
+
+            showScreen('task');
+        }
+
+        resetBtn.addEventListener('click', reset);
+
+        // --- INICIALIZAÇÃO ---
+        window.onload = () => {
+            initializeTasks();
+            showScreen('task');
+
+            const debugBtn = document.getElementById('debug-btn');
+            if (debugBtn) {
+                debugBtn.addEventListener('click', () => {
+                    // Garante que o Tone.js pode ser iniciado
+                    if (Tone.context.state !== 'running') {
+                        Tone.context.resume().then(debugGoToRoulette);
+                    } else {
+                        debugGoToRoulette();
+                    }
+                });
+            }
+        };
+    </script>
+</body>
+
+</html>
